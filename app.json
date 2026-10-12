@@ -1,3 +1,4 @@
+
 {
   "expo": {
     "name": "DRC Golf Tempo",
@@ -14,7 +15,7 @@
       "supportsTablet": false
     },
     "android": {
-      "package": "com.drc.golftourbillion",
+      "package": "com.drc.golftempo",
       "versionCode": 11,
       "allowBackup": false,
       "permissions": [
@@ -65,3 +66,8 @@
         "expo-image-picker",
         {
           "photosPermission": "Allow DRC Golf Tempo to choose swing videos and photos."
+        }
+      ]
+    ]
+  }
+}
