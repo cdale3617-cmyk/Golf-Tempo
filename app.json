@@ -64,4 +64,4 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow DRC Golf Tempo to choose swing videos and
+          "photosPermission": "Allow DRC Golf Tempo to choose swing videos and photos."
