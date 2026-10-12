@@ -1,5 +1,10 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, {
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
+
 import {
   Alert,
   Pressable,
@@ -9,7 +14,12 @@ import {
   Text,
   View,
 } from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+
+import {
+  CameraView,
+  useCameraPermissions,
+} from 'expo-camera';
+
 import * as ImagePicker from 'expo-image-picker';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -22,22 +32,74 @@ type SwingVideo = {
 };
 
 const STORAGE_KEY = 'golf-tempo-recordings';
-const VIDEO_FOLDER =
+const VIDEO_DIR =
   FileSystem.documentDirectory + 'swing-videos/';
+
+function SwingPlayer({
+  uri,
+  autoPlay,
+}: {
+  uri: string;
+  autoPlay: boolean;
+}) {
+  const player = useVideoPlayer(uri, p => {
+    p.loop = false;
+  });
+
+  useEffect(() => {
+    if (!autoPlay) return;
+
+    let cancelled = false;
+
+    async function start() {
+      try {
+        await player.replaceAsync(uri);
+        if (cancelled) return;
+
+        player.currentTime = 0;
+        player.play();
+      } catch (error) {
+        if (!cancelled) {
+          Alert.alert('Playback Error', String(error));
+        }
+      }
+    }
+
+    start();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [player, uri, autoPlay]);
+
+  return (
+    <VideoView
+      player={player}
+      style={styles.camera}
+      nativeControls
+      contentFit="contain"
+    />
+  );
+}
 
 export default function RecordingScreen() {
   const camera = useRef<CameraView>(null);
-  const [permission, requestPermission] = useCameraPermissions();
+  const scroll = useRef<ScrollView>(null);
+
+  const [permission, requestPermission] =
+    useCameraPermissions();
 
   const [cameraOpen, setCameraOpen] = useState(false);
   const [recording, setRecording] = useState(false);
-  const [videoUri, setVideoUri] = useState<string | null>(null);
-  const [savedVideos, setSavedVideos] = useState<SwingVideo[]>([]);
-  const [busy, setBusy] = useState(false);
+  const [videoUri, setVideoUri] =
+    useState<string | null>(null);
 
-  const player = useVideoPlayer(videoUri, p => {
-    p.loop = false;
-  });
+  const [savedVideos, setSavedVideos] =
+    useState<SwingVideo[]>([]);
+
+  const [busy, setBusy] = useState(false);
+  const [autoPlay, setAutoPlay] = useState(false);
+  const [playKey, setPlayKey] = useState(0);
 
   useEffect(() => {
     loadHistory();
@@ -45,14 +107,20 @@ export default function RecordingScreen() {
 
   async function loadHistory() {
     try {
-      const data = await AsyncStorage.getItem(STORAGE_KEY);
+      const data = await AsyncStorage.getItem(
+        STORAGE_KEY
+      );
+
       if (!data) return;
 
       const videos: SwingVideo[] = JSON.parse(data);
       const existing: SwingVideo[] = [];
 
       for (const video of videos) {
-        const info = await FileSystem.getInfoAsync(video.uri);
+        const info = await FileSystem.getInfoAsync(
+          video.uri
+        );
+
         if (info.exists) existing.push(video);
       }
 
@@ -69,6 +137,18 @@ export default function RecordingScreen() {
     }
   }
 
+  function showVideo(uri: string, play: boolean) {
+    setCameraOpen(false);
+    setVideoUri(uri);
+    setAutoPlay(play);
+    setPlayKey(value => value + 1);
+
+    scroll.current?.scrollTo({
+      y: 0,
+      animated: true,
+    });
+  }
+
   async function openCamera() {
     if (!permission?.granted) {
       const result = await requestPermission();
@@ -80,6 +160,7 @@ export default function RecordingScreen() {
     }
 
     setVideoUri(null);
+    setAutoPlay(false);
     setCameraOpen(true);
   }
 
@@ -94,8 +175,7 @@ export default function RecordingScreen() {
       });
 
       if (result?.uri) {
-        setVideoUri(result.uri);
-        setCameraOpen(false);
+        showVideo(result.uri, false);
       }
     } catch (error) {
       Alert.alert('Recording Error', String(error));
@@ -110,14 +190,17 @@ export default function RecordingScreen() {
 
   async function chooseVideo() {
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['videos'],
-        allowsEditing: false,
-      });
+      const result =
+        await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['videos'],
+          allowsEditing: false,
+        });
 
-      if (!result.canceled && result.assets.length > 0) {
-        setVideoUri(result.assets[0].uri);
-        setCameraOpen(false);
+      if (
+        !result.canceled &&
+        result.assets.length > 0
+      ) {
+        showVideo(result.assets[0].uri, false);
       }
     } catch (error) {
       Alert.alert('Video Selection Error', String(error));
@@ -130,17 +213,18 @@ export default function RecordingScreen() {
     setBusy(true);
 
     try {
-      await FileSystem.makeDirectoryAsync(VIDEO_FOLDER, {
-        intermediates: true,
-      });
+      await FileSystem.makeDirectoryAsync(
+        VIDEO_DIR,
+        { intermediates: true }
+      );
 
       const id =
         Date.now().toString() +
         '-' +
-        Math.floor(Math.random() * 100000).toString();
+        Math.floor(Math.random() * 100000);
 
       const destination =
-        VIDEO_FOLDER + 'swing-' + id + '.mp4';
+        VIDEO_DIR + 'swing-' + id + '.mp4';
 
       await FileSystem.copyAsync({
         from: videoUri,
@@ -168,11 +252,11 @@ export default function RecordingScreen() {
       }
 
       setSavedVideos(updated);
-      setVideoUri(destination);
+      showVideo(destination, false);
 
       Alert.alert(
         'Video Saved',
-        'Your swing is saved in Recording History.'
+        'Recording saved in Swing History.'
       );
     } catch (error) {
       Alert.alert('Save Failed', String(error));
@@ -181,9 +265,24 @@ export default function RecordingScreen() {
     }
   }
 
-  function playVideo(video: SwingVideo) {
-    setCameraOpen(false);
-    setVideoUri(video.uri);
+  async function playSavedVideo(video: SwingVideo) {
+    try {
+      const info = await FileSystem.getInfoAsync(
+        video.uri
+      );
+
+      if (!info.exists) {
+        Alert.alert(
+          'Video Missing',
+          'This recording could not be found.'
+        );
+        return;
+      }
+
+      showVideo(video.uri, true);
+    } catch (error) {
+      Alert.alert('Playback Error', String(error));
+    }
   }
 
   function confirmDelete(video: SwingVideo) {
@@ -219,6 +318,7 @@ export default function RecordingScreen() {
 
       if (videoUri === video.uri) {
         setVideoUri(null);
+        setAutoPlay(false);
       }
 
       await FileSystem.deleteAsync(video.uri, {
@@ -237,9 +337,17 @@ export default function RecordingScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.heading}>GOLF TEMPO</Text>
-        <Text style={styles.subheading}>Swing Monitor</Text>
+      <ScrollView
+        ref={scroll}
+        contentContainerStyle={styles.content}
+      >
+        <Text style={styles.heading}>
+          GOLF TEMPO
+        </Text>
+
+        <Text style={styles.subheading}>
+          Swing Monitor
+        </Text>
 
         {cameraOpen ? (
           <View style={styles.videoContainer}>
@@ -253,11 +361,10 @@ export default function RecordingScreen() {
           </View>
         ) : videoUri ? (
           <View style={styles.videoContainer}>
-            <VideoView
-              player={player}
-              style={styles.camera}
-              nativeControls
-              contentFit="contain"
+            <SwingPlayer
+              key={playKey}
+              uri={videoUri}
+              autoPlay={autoPlay}
             />
           </View>
         ) : (
@@ -337,11 +444,15 @@ export default function RecordingScreen() {
           </Text>
         ) : (
           savedVideos.map(video => (
-            <View key={video.id} style={styles.historyRow}>
+            <View
+              key={video.id}
+              style={styles.historyRow}
+            >
               <View style={styles.historyInfo}>
                 <Text style={styles.historyDate}>
                   {video.date}
                 </Text>
+
                 <Text style={styles.historyLabel}>
                   Swing Recording
                 </Text>
@@ -349,7 +460,7 @@ export default function RecordingScreen() {
 
               <Pressable
                 style={styles.smallButton}
-                onPress={() => playVideo(video)}
+                onPress={() => playSavedVideo(video)}
               >
                 <Text style={styles.smallButtonText}>
                   PLAY
