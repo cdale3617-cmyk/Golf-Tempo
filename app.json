@@ -4,11 +4,9 @@
     "slug": "drc-golf-tempo",
     "version": "1.0.10",
     "orientation": "default",
-    "icon": "./assets/images/icon.png",
     "scheme": "drc-golf-tempo",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#11151B"
     },
@@ -36,9 +34,6 @@
         "android.permission.READ_MEDIA_VIDEO",
         "android.permission.READ_MEDIA_VISUAL_USER_SELECTED"
       ]
-    },
-    "web": {
-      "favicon": "./assets/images/icon.png"
     },
     "plugins": [
       "./plugins/withHealthPrivacy",
@@ -69,16 +64,4 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow DRC Golf Tempo to choose swing videos and green photos.",
-          "cameraPermission": "Allow DRC Golf Tempo to capture green photos.",
-          "microphonePermission": false
-        }
-      ],
-      "expo-sharing"
-    ],
-    "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
-    }
-  }
-}
+          "photosPermission": "Allow DRC Golf Tempo to choose swing videos and
