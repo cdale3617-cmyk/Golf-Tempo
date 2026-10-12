@@ -1,5 +1,5 @@
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -12,43 +12,93 @@ import {
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import * as FileSystem from 'expo-file-system/legacy';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+type SwingVideo = {
+  id: string;
+  uri: string;
+  date: string;
+};
+
+const STORAGE_KEY = 'golf-tempo-recordings';
+const VIDEO_FOLDER =
+  FileSystem.documentDirectory + 'swing-videos/';
 
 export default function RecordingScreen() {
   const camera = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
+
   const [cameraOpen, setCameraOpen] = useState(false);
   const [recording, setRecording] = useState(false);
   const [videoUri, setVideoUri] = useState<string | null>(null);
+  const [savedVideos, setSavedVideos] = useState<SwingVideo[]>([]);
+  const [busy, setBusy] = useState(false);
 
-  const player = useVideoPlayer(videoUri, (p) => {
-    p.loop = true;
+  const player = useVideoPlayer(videoUri, p => {
+    p.loop = false;
   });
+
+  useEffect(() => {
+    loadHistory();
+  }, []);
+
+  async function loadHistory() {
+    try {
+      const data = await AsyncStorage.getItem(STORAGE_KEY);
+      if (!data) return;
+
+      const videos: SwingVideo[] = JSON.parse(data);
+      const existing: SwingVideo[] = [];
+
+      for (const video of videos) {
+        const info = await FileSystem.getInfoAsync(video.uri);
+        if (info.exists) existing.push(video);
+      }
+
+      setSavedVideos(existing);
+
+      if (existing.length !== videos.length) {
+        await AsyncStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify(existing)
+        );
+      }
+    } catch (error) {
+      Alert.alert('History Error', String(error));
+    }
+  }
 
   async function openCamera() {
     if (!permission?.granted) {
       const result = await requestPermission();
+
       if (!result.granted) {
         Alert.alert('Camera permission required');
         return;
       }
     }
+
     setVideoUri(null);
     setCameraOpen(true);
   }
 
   async function startRecording() {
+    if (!camera.current || recording) return;
+
     try {
-      if (!camera.current) return;
       setRecording(true);
+
       const result = await camera.current.recordAsync({
         maxDuration: 60,
       });
+
       if (result?.uri) {
         setVideoUri(result.uri);
         setCameraOpen(false);
       }
     } catch (error) {
-      Alert.alert('Recording error', String(error));
+      Alert.alert('Recording Error', String(error));
     } finally {
       setRecording(false);
     }
@@ -60,14 +110,6 @@ export default function RecordingScreen() {
 
   async function chooseVideo() {
     try {
-      const permissionResult =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-      if (!permissionResult.granted) {
-        Alert.alert('Video library permission required');
-        return;
-      }
-
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['videos'],
         allowsEditing: false,
@@ -78,9 +120,120 @@ export default function RecordingScreen() {
         setCameraOpen(false);
       }
     } catch (error) {
-      Alert.alert('Video selection error', String(error));
+      Alert.alert('Video Selection Error', String(error));
     }
   }
+
+  async function saveVideo() {
+    if (!videoUri || busy) return;
+
+    setBusy(true);
+
+    try {
+      await FileSystem.makeDirectoryAsync(VIDEO_FOLDER, {
+        intermediates: true,
+      });
+
+      const id =
+        Date.now().toString() +
+        '-' +
+        Math.floor(Math.random() * 100000).toString();
+
+      const destination =
+        VIDEO_FOLDER + 'swing-' + id + '.mp4';
+
+      await FileSystem.copyAsync({
+        from: videoUri,
+        to: destination,
+      });
+
+      const newVideo: SwingVideo = {
+        id,
+        uri: destination,
+        date: new Date().toLocaleString(),
+      };
+
+      const updated = [newVideo, ...savedVideos];
+
+      try {
+        await AsyncStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify(updated)
+        );
+      } catch (error) {
+        await FileSystem.deleteAsync(destination, {
+          idempotent: true,
+        });
+        throw error;
+      }
+
+      setSavedVideos(updated);
+      setVideoUri(destination);
+
+      Alert.alert(
+        'Video Saved',
+        'Your swing is saved in Recording History.'
+      );
+    } catch (error) {
+      Alert.alert('Save Failed', String(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function playVideo(video: SwingVideo) {
+    setCameraOpen(false);
+    setVideoUri(video.uri);
+  }
+
+  function confirmDelete(video: SwingVideo) {
+    Alert.alert(
+      'Delete Recording',
+      'Permanently delete this swing video?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => deleteVideo(video),
+        },
+      ]
+    );
+  }
+
+  async function deleteVideo(video: SwingVideo) {
+    if (busy) return;
+    setBusy(true);
+
+    try {
+      const updated = savedVideos.filter(
+        item => item.id !== video.id
+      );
+
+      await AsyncStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(updated)
+      );
+
+      setSavedVideos(updated);
+
+      if (videoUri === video.uri) {
+        setVideoUri(null);
+      }
+
+      await FileSystem.deleteAsync(video.uri, {
+        idempotent: true,
+      });
+    } catch (error) {
+      Alert.alert('Delete Error', String(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const alreadySaved = savedVideos.some(
+    item => item.uri === videoUri
+  );
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -89,7 +242,7 @@ export default function RecordingScreen() {
         <Text style={styles.subheading}>Swing Monitor</Text>
 
         {cameraOpen ? (
-          <View style={styles.cameraContainer}>
+          <View style={styles.videoContainer}>
             <CameraView
               ref={camera}
               style={styles.camera}
@@ -99,7 +252,7 @@ export default function RecordingScreen() {
             />
           </View>
         ) : videoUri ? (
-          <View style={styles.cameraContainer}>
+          <View style={styles.videoContainer}>
             <VideoView
               player={player}
               style={styles.camera}
@@ -110,7 +263,7 @@ export default function RecordingScreen() {
         ) : (
           <View style={styles.placeholder}>
             <Text style={styles.placeholderText}>
-              Record or select a golf swing video
+              Record or choose a golf swing video
             </Text>
           </View>
         )}
@@ -118,21 +271,31 @@ export default function RecordingScreen() {
         {cameraOpen ? (
           <Pressable
             style={styles.button}
-            onPress={recording ? stopRecording : startRecording}
+            onPress={
+              recording ? stopRecording : startRecording
+            }
           >
             <Text style={styles.buttonText}>
-              {recording ? 'STOP RECORDING' : 'START RECORDING'}
+              {recording
+                ? 'STOP RECORDING'
+                : 'START RECORDING'}
             </Text>
           </Pressable>
         ) : (
           <>
-            <Pressable style={styles.button} onPress={openCamera}>
+            <Pressable
+              style={styles.button}
+              onPress={openCamera}
+            >
               <Text style={styles.buttonText}>
                 RECORD SWING VIDEO
               </Text>
             </Pressable>
 
-            <Pressable style={styles.button} onPress={chooseVideo}>
+            <Pressable
+              style={styles.button}
+              onPress={chooseVideo}
+            >
               <Text style={styles.buttonText}>
                 CHOOSE VIDEO
               </Text>
@@ -140,10 +303,70 @@ export default function RecordingScreen() {
           </>
         )}
 
-        {videoUri && (
-          <Text style={styles.status}>
-            Video ready for review
+        {videoUri && !cameraOpen && (
+          <>
+            <Text style={styles.status}>
+              Video ready for review
+            </Text>
+
+            {!alreadySaved ? (
+              <Pressable
+                style={styles.button}
+                onPress={saveVideo}
+                disabled={busy}
+              >
+                <Text style={styles.buttonText}>
+                  {busy ? 'SAVING...' : 'SAVE VIDEO'}
+                </Text>
+              </Pressable>
+            ) : (
+              <Text style={styles.savedStatus}>
+                RECORDING SAVED
+              </Text>
+            )}
+          </>
+        )}
+
+        <Text style={styles.historyTitle}>
+          Recording History
+        </Text>
+
+        {savedVideos.length === 0 ? (
+          <Text style={styles.emptyText}>
+            No saved recordings yet
           </Text>
+        ) : (
+          savedVideos.map(video => (
+            <View key={video.id} style={styles.historyRow}>
+              <View style={styles.historyInfo}>
+                <Text style={styles.historyDate}>
+                  {video.date}
+                </Text>
+                <Text style={styles.historyLabel}>
+                  Swing Recording
+                </Text>
+              </View>
+
+              <Pressable
+                style={styles.smallButton}
+                onPress={() => playVideo(video)}
+              >
+                <Text style={styles.smallButtonText}>
+                  PLAY
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.deleteButton}
+                onPress={() => confirmDelete(video)}
+                disabled={busy}
+              >
+                <Text style={styles.deleteText}>
+                  DELETE
+                </Text>
+              </Pressable>
+            </View>
+          ))
         )}
 
         <Text style={styles.footer}>
@@ -176,7 +399,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 22,
   },
-  cameraContainer: {
+  videoContainer: {
     width: '100%',
     height: 390,
     backgroundColor: '#000000',
@@ -219,6 +442,67 @@ const styles = StyleSheet.create({
     color: '#D7B765',
     textAlign: 'center',
     marginTop: 20,
+  },
+  savedStatus: {
+    color: '#D7B765',
+    textAlign: 'center',
+    marginTop: 15,
+    fontWeight: 'bold',
+  },
+  historyTitle: {
+    color: '#D7B765',
+    fontSize: 21,
+    fontWeight: 'bold',
+    marginTop: 35,
+    marginBottom: 15,
+  },
+  emptyText: {
+    color: '#A8B5AB',
+    textAlign: 'center',
+  },
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#102B20',
+    padding: 10,
+    marginBottom: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#B99748',
+  },
+  historyInfo: {
+    flex: 1,
+  },
+  historyDate: {
+    color: '#FFFFFF',
+    fontSize: 12,
+  },
+  historyLabel: {
+    color: '#D7B765',
+    fontSize: 13,
+    marginTop: 4,
+  },
+  smallButton: {
+    backgroundColor: '#B99748',
+    padding: 10,
+    borderRadius: 7,
+    marginRight: 6,
+  },
+  smallButtonText: {
+    color: '#071C15',
+    fontWeight: 'bold',
+    fontSize: 11,
+  },
+  deleteButton: {
+    borderColor: '#B99748',
+    borderWidth: 1,
+    padding: 9,
+    borderRadius: 7,
+  },
+  deleteText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: 11,
   },
   footer: {
     color: '#A8B5AB',
