@@ -8,11 +8,16 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Link } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Section = 'HOME' | 'ROUND' | 'BAG' | 'LAB' | 'MORE';
 
 const sections: Section[] = [
-  'HOME', 'ROUND', 'BAG', 'LAB', 'MORE',
+  'HOME',
+  'ROUND',
+  'BAG',
+  'LAB',
+  'MORE',
 ];
 
 const starterClubs = [
@@ -22,14 +27,18 @@ const starterClubs = [
 ];
 
 export default function Home() {
+  const insets = useSafeAreaInsets();
+
   const [section, setSection] = useState<Section>('HOME');
   const [hole, setHole] = useState(1);
   const [scores, setScores] = useState<Record<number, number>>({});
   const [clubs, setClubs] = useState(starterClubs);
 
   const score = scores[hole] ?? 4;
+
   const total = Object.values(scores).reduce(
-    (sum, value) => sum + value, 0
+    (sum, value) => sum + value,
+    0
   );
 
   function saveScore(value: number) {
@@ -40,26 +49,41 @@ export default function Home() {
   }
 
   function changeClub(index: number, amount: number) {
-    setClubs(previous => previous.map((club, i) =>
-      i === index
-        ? { ...club, metres: Math.max(0, club.metres + amount) }
-        : club
-    ));
+    setClubs(previous =>
+      previous.map((club, i) =>
+        i === index
+          ? {
+              ...club,
+              metres: Math.max(0, club.metres + amount),
+            }
+          : club
+      )
+    );
   }
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: Math.max(insets.top, 20) + 20 },
+        ]}
+      >
         <Text style={styles.brand}>DRC</Text>
+
         <Text style={styles.heading}>GOLF TEMPO</Text>
+
         <Text style={styles.subtitle}>{section}</Text>
 
         {section === 'HOME' && (
           <View style={styles.panel}>
             <Text style={styles.title}>Golf Dashboard</Text>
+
             <Text style={styles.copy}>
               Swing practice, scorecard and golf tools.
             </Text>
+
             <Link href="/record" asChild>
               <Pressable style={styles.primary}>
                 <Text style={styles.primaryText}>
@@ -67,6 +91,7 @@ export default function Home() {
                 </Text>
               </Pressable>
             </Link>
+
             <Pressable
               style={styles.secondary}
               onPress={() => setSection('ROUND')}
@@ -81,36 +106,53 @@ export default function Home() {
         {section === 'ROUND' && (
           <View style={styles.panel}>
             <Text style={styles.title}>Scorecard</Text>
-            <Text style={styles.copy}>Hole {hole} of 18</Text>
+
+            <Text style={styles.copy}>
+              Hole {hole} of 18
+            </Text>
+
             <View style={styles.controls}>
               <Pressable
                 style={styles.smallButton}
-                onPress={() => setHole(h => Math.max(1, h - 1))}
+                onPress={() =>
+                  setHole(h => Math.max(1, h - 1))
+                }
               >
                 <Text style={styles.buttonText}>PREV</Text>
               </Pressable>
+
               <Text style={styles.value}>{score}</Text>
+
               <Pressable
                 style={styles.smallButton}
-                onPress={() => setHole(h => Math.min(18, h + 1))}
+                onPress={() =>
+                  setHole(h => Math.min(18, h + 1))
+                }
               >
                 <Text style={styles.buttonText}>NEXT</Text>
               </Pressable>
             </View>
+
             <View style={styles.controls}>
               <Pressable
                 style={styles.smallButton}
                 onPress={() => saveScore(score - 1)}
               >
-                <Text style={styles.buttonText}>- STROKE</Text>
+                <Text style={styles.buttonText}>
+                  - STROKE
+                </Text>
               </Pressable>
+
               <Pressable
                 style={styles.smallButton}
                 onPress={() => saveScore(score + 1)}
               >
-                <Text style={styles.buttonText}>+ STROKE</Text>
+                <Text style={styles.buttonText}>
+                  + STROKE
+                </Text>
               </Pressable>
             </View>
+
             <Pressable
               style={styles.primary}
               onPress={() => {
@@ -122,9 +164,11 @@ export default function Home() {
                 SAVE HOLE / NEXT
               </Text>
             </Pressable>
-            <Text style={styles.copy}>
+
+            <Text style={[styles.copy, styles.total]}>
               Recorded total: {total} strokes
             </Text>
+
             <Text style={styles.note}>
               Scores are temporary until permanent storage is added.
             </Text>
@@ -134,23 +178,37 @@ export default function Home() {
         {section === 'BAG' && (
           <View style={styles.panel}>
             <Text style={styles.title}>My Bag</Text>
+
             <Text style={styles.copy}>
               Adjust carry distances in metres.
             </Text>
+
             {clubs.map((club, index) => (
               <View key={club.name} style={styles.clubRow}>
-                <Text style={styles.clubName}>{club.name}</Text>
-                <Pressable onPress={() => changeClub(index, -5)}>
+                <Text style={styles.clubName}>
+                  {club.name}
+                </Text>
+
+                <Pressable
+                  onPress={() => changeClub(index, -5)}
+                  style={styles.adjustButton}
+                >
                   <Text style={styles.adjust}>-</Text>
                 </Pressable>
+
                 <Text style={styles.distance}>
                   {club.metres} m
                 </Text>
-                <Pressable onPress={() => changeClub(index, 5)}>
+
+                <Pressable
+                  onPress={() => changeClub(index, 5)}
+                  style={styles.adjustButton}
+                >
                   <Text style={styles.adjust}>+</Text>
                 </Pressable>
               </View>
             ))}
+
             <Text style={styles.note}>
               Sample clubs. Changes are temporary.
             </Text>
@@ -160,9 +218,11 @@ export default function Home() {
         {section === 'LAB' && (
           <View style={styles.panel}>
             <Text style={styles.title}>Golf Lab</Text>
+
             <Text style={styles.copy}>
               Record, select and play swing videos.
             </Text>
+
             <Link href="/record" asChild>
               <Pressable style={styles.primary}>
                 <Text style={styles.primaryText}>
@@ -170,6 +230,7 @@ export default function Home() {
                 </Text>
               </Pressable>
             </Link>
+
             <Text style={styles.note}>
               Additional analysis modules will be restored separately.
             </Text>
@@ -179,12 +240,15 @@ export default function Home() {
         {section === 'MORE' && (
           <View style={styles.panel}>
             <Text style={styles.title}>More</Text>
+
             <Text style={styles.copy}>
               DRC Golf Tempo
             </Text>
+
             <Text style={styles.copy}>
               Home, Round, Bag, Lab and More navigation.
             </Text>
+
             <Text style={styles.note}>
               GPS, course maps, biometrics and advanced analysis
               are not yet connected.
@@ -193,7 +257,14 @@ export default function Home() {
         )}
       </ScrollView>
 
-      <View style={styles.nav}>
+      <View
+        style={[
+          styles.nav,
+          {
+            paddingBottom: Math.max(insets.bottom, 12) + 8,
+          },
+        ]}
+      >
         {sections.map(item => (
           <Pressable
             key={item}
@@ -203,10 +274,14 @@ export default function Home() {
               section === item && styles.active,
             ]}
           >
-            <Text style={[
-              styles.navText,
-              section === item && styles.activeText,
-            ]}>
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              style={[
+                styles.navText,
+                section === item && styles.activeText,
+              ]}
+            >
               {item}
             </Text>
           </Pressable>
@@ -221,11 +296,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#071C15',
   },
+
+  scroll: {
+    flex: 1,
+  },
+
   content: {
-    padding: 18,
-    paddingTop: 55,
+    paddingHorizontal: 18,
     paddingBottom: 30,
   },
+
   brand: {
     color: '#D7B765',
     textAlign: 'center',
@@ -233,6 +313,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 5,
   },
+
   heading: {
     color: '#D7B765',
     textAlign: 'center',
@@ -240,12 +321,14 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginTop: 8,
   },
+
   subtitle: {
     color: '#EDE9DB',
     textAlign: 'center',
     letterSpacing: 3,
     marginTop: 10,
   },
+
   panel: {
     marginTop: 30,
     padding: 18,
@@ -254,23 +337,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 16,
   },
+
   title: {
     color: '#D7B765',
     fontSize: 23,
     fontWeight: '700',
     marginBottom: 12,
   },
+
   copy: {
     color: '#FFFFFF',
     fontSize: 16,
     lineHeight: 24,
     marginBottom: 14,
   },
+
   note: {
     color: '#B8C4BB',
     marginTop: 18,
     lineHeight: 21,
   },
+
   primary: {
     backgroundColor: '#B99748',
     padding: 16,
@@ -278,10 +365,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 10,
   },
+
   primaryText: {
     color: '#071C15',
     fontWeight: '800',
+    textAlign: 'center',
   },
+
   secondary: {
     backgroundColor: '#214637',
     padding: 16,
@@ -289,26 +379,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 12,
   },
+
   buttonText: {
     color: '#FFFFFF',
     fontWeight: '700',
+    textAlign: 'center',
   },
+
   controls: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginVertical: 12,
   },
+
   smallButton: {
     backgroundColor: '#214637',
     padding: 12,
     borderRadius: 8,
   },
+
   value: {
     color: '#D7B765',
     fontSize: 28,
     fontWeight: '800',
   },
+
+  total: {
+    marginTop: 18,
+  },
+
   clubRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -317,47 +417,58 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#355547',
   },
+
   clubName: {
     color: '#FFFFFF',
     flex: 1,
     fontSize: 15,
   },
+
+  adjustButton: {
+    minWidth: 34,
+    alignItems: 'center',
+  },
+
   adjust: {
     color: '#D7B765',
     fontSize: 26,
-    paddingHorizontal: 10,
   },
+
   distance: {
     color: '#FFFFFF',
-    minWidth: 60,
+    minWidth: 65,
     textAlign: 'center',
   },
+
   nav: {
     flexDirection: 'row',
     backgroundColor: '#102B20',
     borderTopWidth: 1,
     borderTopColor: '#B99748',
-    paddingBottom: 12,
-    paddingTop: 10,
+    paddingTop: 12,
+    paddingHorizontal: 5,
+    minHeight: 65,
   },
+
   navItem: {
     flex: 1,
+    minWidth: 0,
     alignItems: 'center',
-    paddingVertical: 9,
+    justifyContent: 'center',
+    paddingVertical: 10,
   },
+
   active: {
     borderBottomWidth: 2,
     borderBottomColor: '#D7B765',
   },
+
   navText: {
     color: '#B8C4BB',
     fontSize: 10,
     fontWeight: '700',
   },
-  active: {
-    borderBottomWidth: 2,
-    borderBottomColor: '#D7B765',
-  },
+
   activeText: {
     color: '#D7B765',
   },
