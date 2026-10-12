@@ -1,0 +1,84 @@
+name: Build Golf Tempo APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: golf-tempo-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    env:
+      CI: "1"
+      EXPO_NO_TELEMETRY: "1"
+      NODE_OPTIONS: --max-old-space-size=4096
+
+    steps:
+      - name: Download source
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10"
+          run_install: false
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Generate Android project
+        run: pnpm exec expo prebuild --platform android --no-install
+
+      - name: Prepare Gradle
+        run: |
+          chmod +x android/gradlew
+          printf 'sdk.dir=%s\n' "$ANDROID_HOME" > android/local.properties
+
+      - name: Build standalone APK
+        working-directory: android
+        run: |
+          ./gradlew :app:assembleRelease \
+            --no-daemon \
+            --stacktrace \
+            --max-workers=2 \
+            -PreactNativeArchitectures=arm64-v8a \
+            -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g"
+
+      - name: Prepare download
+        run: |
+          mkdir -p apk
+          cp android/app/build/outputs/apk/release/app-release.apk \
+            apk/DRC-GOLF-TEMPO.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DRC-GOLF-TEMPO-APK
+          path: apk/DRC-GOLF-TEMPO.apk
+          if-no-files-found: error
+          retention-days: 14
